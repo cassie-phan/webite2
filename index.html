@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WeatherTunes</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- LANDING -->
+  <section id="landing" class="landing">
+
+    <div class="landing-left">
+      <div class="vinyl-wrapper">
+        <img class="vinyl" src="images/vinyl.png">
+      </div>
+    </div>
+
+    <div class="landing-right">
+      <h1>WeatherTunes</h1>
+      <p>Music that matches your world</p>
+
+      <button id="use-location-btn">Use My Location</button>
+      <button id="connect-spotify-btn" type="button">Connect Spotify</button>
+
+      <p>or</p>
+
+      <form id="city-form">
+        <input id="city-input" placeholder="Enter a city">
+        <button type="submit">Search</button>
+      </form>
+
+      <p id="status-message"></p>
+    </div>
+
+  </section>
+
+  <!-- RESULTS -->
+  <section id="results" class="hidden">
+    <h2 class="section-title">recommended tracks</h2>
+    <div class="results-actions">
+      <button id="shuffle-btn" type="button" class="hidden">Shuffle Again</button>
+    </div>
+    <div id="songs-grid" class="grid"></div>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
