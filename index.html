@@ -2,47 +2,58 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WeatherTunes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skyline — Weather & a line</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
 </head>
 <body>
+  <div class="page">
+    <header class="header">
+      <p class="eyebrow">Weather · quote · geolocation · saved city</p>
+      <h1>Skyline</h1>
+      <p class="tagline">Local weather from Open-Meteo, a random quote from Quotable, your choice of place via the browser—or we remember your last city.</p>
+    </header>
 
-  <!-- LANDING -->
-  <section id="landing" class="landing">
+    <main class="main">
+      <section class="panel controls" aria-labelledby="controls-heading">
+        <h2 id="controls-heading" class="sr-only">Choose a place</h2>
+        <div class="button-row">
+          <button type="button" id="use-location-btn" class="btn btn-primary">Use my location</button>
+        </div>
+        <p class="divider"><span>or type a city</span></p>
+        <form id="city-form" class="city-form">
+          <label for="city-input" class="sr-only">City name</label>
+          <input type="text" id="city-input" name="city" placeholder="e.g. Seattle" autocomplete="address-level2" maxlength="80">
+          <button type="submit" class="btn btn-secondary">Look up</button>
+        </form>
+        <p id="status-message" class="status" role="status" aria-live="polite"></p>
+        <p id="hint-last-city" class="hint hidden" aria-live="polite"></p>
+      </section>
 
-    <div class="landing-left">
-      <div class="vinyl-wrapper">
-        <img class="vinyl" src="images/vinyl.png">
-      </div>
-    </div>
+      <section id="results" class="panel results hidden" aria-live="polite">
+        <div class="card weather-card">
+          <h2 class="card-title">Right now</h2>
+          <p id="weather-location" class="location-name"></p>
+          <p id="weather-temp" class="temp"></p>
+          <p id="weather-desc" class="weather-desc"></p>
+          <p id="weather-wind" class="meta"></p>
+        </div>
+        <div class="card quote-card">
+          <h2 class="card-title">While you’re here</h2>
+          <blockquote id="quote-text" class="quote"></blockquote>
+          <p id="quote-author" class="quote-author"></p>
+          <p id="quote-fallback" class="quote-fallback hidden">Quote unavailable—we’ll skip it this time.</p>
+        </div>
+      </section>
+    </main>
 
-    <div class="landing-right">
-      <h1>WeatherTunes</h1>
-      <p>Music that matches your world</p>
-
-      <button id="use-location-btn">Use My Location</button>
-      <button id="connect-spotify-btn" type="button">Connect Spotify</button>
-
-      <p>or</p>
-
-      <form id="city-form">
-        <input id="city-input" placeholder="Enter a city">
-        <button type="submit">Search</button>
-      </form>
-
-      <p id="status-message"></p>
-    </div>
-
-  </section>
-
-  <!-- RESULTS -->
-  <section id="results" class="hidden">
-    <h2 class="section-title">recommended tracks</h2>
-    <div class="results-actions">
-      <button id="shuffle-btn" type="button" class="hidden">Shuffle Again</button>
-    </div>
-    <div id="songs-grid" class="grid"></div>
-  </section>
+    <footer class="footer">
+      <p>Weather: Open-Meteo · Quote: Quotable · Place: Geolocation API · Memory: <code>localStorage</code></p>
+    </footer>
+  </div>
 
   <script src="script.js"></script>
 </body>
