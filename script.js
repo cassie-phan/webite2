@@ -7,7 +7,8 @@ const shuffleBtn = document.getElementById("shuffle-btn");
 let latestSongs = [];
 
 const SPOTIFY_CLIENT_ID = "ebc367ab357842ac8fb9453ece7e9e02";
-const SPOTIFY_SCOPES = "user-read-email";
+const SPOTIFY_SCOPES = "user-read-email user-top-read";
+const SPOTIFY_REDIRECT_URI = "https://cassie-phan.github.io/webite2/";
 const spotifyTokenState = {
   accessToken: localStorage.getItem("spotify_access_token") || "",
   refreshToken: localStorage.getItem("spotify_refresh_token") || "",
@@ -102,7 +103,7 @@ async function loadWeatherAndMusic(lat, lng) {
 
     const vibe = getVibe(desc, temp);
 
-    const songs = await fetchSongs(vibe.query);
+    const songs = await fetchSongs(vibe);
     latestSongs = songs;
 
     renderSongs(songs);
@@ -120,31 +121,32 @@ async function loadWeatherAndMusic(lat, lng) {
 function getVibe(desc, temp) {
   desc = desc.toLowerCase();
 
-  if (desc.includes("rain")) return { query: "lofi chill" };
-  if (desc.includes("cloud")) return { query: "dream pop" };
-  if (desc.includes("snow")) return { query: "acoustic" };
-  if (desc.includes("storm")) return { query: "rock" };
+  // seed_genres must be from Spotify’s genre-seed list (see Recommendations API)
+  if (desc.includes("rain")) {
+    return { query: "lofi chill", seedGenres: ["chill", "study"] };
+  }
+  if (desc.includes("cloud")) {
+    return { query: "dream pop", seedGenres: ["indie-pop", "ambient"] };
+  }
+  if (desc.includes("snow")) {
+    return { query: "acoustic", seedGenres: ["acoustic", "folk"] };
+  }
+  if (desc.includes("storm")) {
+    return { query: "rock", seedGenres: ["rock", "alt-rock"] };
+  }
 
-  if (temp > 75) return { query: "summer pop" };
-  return { query: "indie pop" };
+  if (temp > 75) {
+    return { query: "summer pop", seedGenres: ["pop", "summer"] };
+  }
+  return { query: "indie pop", seedGenres: ["indie", "indie-pop"] };
 }
 
 // ----------------------
 // MUSIC
 // ----------------------
-async function fetchSongs(query) {
-  const spotifyTracks = await fetchSpotifySongs(query);
-  if (spotifyTracks.length) return spotifyTracks;
-
-  const res = await fetch(
-    `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&limit=8`
-  );
-  const data = await res.json();
-  return (data.results || []).map(item => ({
-    artworkUrl100: item.artworkUrl100,
-    trackName: item.trackName || item.collectionName,
-    artistName: item.artistName,
-  }));
+async function fetchSongs(vibe) {
+  const spotifyTracks = await fetchSpotifySongs(vibe);
+  return spotifyTracks;
 }
 
 // ----------------------
@@ -159,6 +161,14 @@ function renderSongs(songs) {
   shuffleBtn.classList.toggle("hidden", !songs.length);
 
   if (!songs.length) return;
+
+  songs = songs.filter(isSongCardItem);
+
+  if (!songs.length) {
+    results.classList.add("hidden");
+    shuffleBtn.classList.add("hidden");
+    return;
+  }
 
   songs = shuffleArray([...songs]);
 
@@ -291,28 +301,120 @@ function shuffleArray(arr) {
   return arr;
 }
 
-async function fetchSpotifySongs(query) {
-  const token = await getValidSpotifyAccessToken();
-  if (!token) return [];
+/** Drops iTunes-style audiobooks/movies if old scripts mixed catalog; Spotify items set kind: "song". */
+function isSongCardItem(song) {
+  if (song.kind != null && song.kind !== "song") return false;
+  const t = (song.trackName || "").toLowerCase();
+  if (/\b(unabridged|audiobook)\b/i.test(t)) return false;
+  if (t.includes("only from audible")) return false;
+  return true;
+}
 
-  try {
-    const res = await fetch(
-      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=16`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-    if (!res.ok) return [];
+function isSpotifyMusicTrack(track) {
+  if (!track || track.type !== "track") return false;
+  const name = (track.name || "").toLowerCase();
+  if (/\b(unabridged|audiobook)\b/i.test(name)) return false;
+  if (name.includes("only from audible")) return false;
+  return true;
+}
 
-    const data = await res.json();
-    const items = data?.tracks?.items || [];
-    return items.map(track => ({
+function mapSpotifyTracksToSongs(tracks) {
+  return (tracks || [])
+    .filter(isSpotifyMusicTrack)
+    .map(track => ({
+      kind: "song",
       artworkUrl100: track?.album?.images?.[0]?.url || "",
       trackName: track?.name || "Unknown",
       artistName: (track?.artists || []).map(a => a.name).join(", ") || "Unknown Artist",
     }));
+}
+
+async function fetchUserTopTrackIds(token) {
+  try {
+    const res = await fetch(
+      "https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=15",
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const ids = (data.items || []).map(t => t.id).filter(Boolean);
+    shuffleArray(ids);
+    return ids.slice(0, 2);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function fetchSpotifyRecommendations(token, seedTrackIds, seedGenres) {
+  const tracks = (seedTrackIds || []).slice(0, 2);
+  const maxGenres = Math.max(0, 5 - tracks.length);
+  let genres = (seedGenres || []).slice(0, maxGenres || 5);
+  if (tracks.length === 0 && genres.length === 0) {
+    genres = ["pop", "indie"];
+  }
+  if (tracks.length > 0 && genres.length === 0 && maxGenres > 0) {
+    genres = ["pop"];
+  }
+
+  const params = new URLSearchParams({
+    limit: "20",
+    market: "from_token",
+  });
+  if (tracks.length) params.set("seed_tracks", tracks.join(","));
+  if (genres.length) params.set("seed_genres", genres.join(","));
+
+  const res = await fetch(
+    `https://api.spotify.com/v1/recommendations?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.tracks || [];
+}
+
+async function fetchSpotifySearchTracks(token, query) {
+  const res = await fetch(
+    `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=25&market=from_token`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data?.tracks?.items || [];
+}
+
+async function fetchSpotifySongs(vibe) {
+  const token = await getValidSpotifyAccessToken();
+  if (!token) {
+    setStatus("Connect Spotify to load recommendations");
+    return [];
+  }
+
+  const seedGenres = vibe.seedGenres || ["pop", "indie"];
+  const query = vibe.query || "indie pop";
+
+  try {
+    const seedTrackIds = await fetchUserTopTrackIds(token);
+    let tracks = [];
+
+    if (seedTrackIds.length) {
+      const genreBudget = Math.min(seedGenres.length, 5 - seedTrackIds.length);
+      const genresForRec = seedGenres.slice(0, Math.max(1, genreBudget));
+      tracks = await fetchSpotifyRecommendations(token, seedTrackIds, genresForRec);
+    }
+
+    if (!tracks.length) {
+      tracks = await fetchSpotifyRecommendations(
+        token,
+        [],
+        seedGenres.slice(0, 5)
+      );
+    }
+
+    if (!tracks.length) {
+      tracks = await fetchSpotifySearchTracks(token, query);
+    }
+
+    return mapSpotifyTracksToSongs(tracks);
   } catch (_) {
     return [];
   }
@@ -367,20 +469,14 @@ function initializeSpotifyAuth() {
 }
 
 async function startSpotifyLogin() {
-  if (!window.location.origin || window.location.origin === "null") {
-    setStatus("Run this app on http://localhost (not file://) for Spotify login");
-    return;
-  }
-
   const verifier = randomString(64);
   const challenge = await sha256Base64Url(verifier);
   sessionStorage.setItem("spotify_code_verifier", verifier);
 
-  const redirectUri = window.location.origin + window.location.pathname;
   const params = new URLSearchParams({
     client_id: SPOTIFY_CLIENT_ID,
     response_type: "code",
-    redirect_uri: redirectUri,
+    redirect_uri: SPOTIFY_REDIRECT_URI,
     code_challenge_method: "S256",
     code_challenge: challenge,
     scope: SPOTIFY_SCOPES,
@@ -392,11 +488,10 @@ async function startSpotifyLogin() {
 async function exchangeSpotifyCodeForToken(code, verifier) {
   if (SPOTIFY_CLIENT_ID === "REPLACE_WITH_SPOTIFY_CLIENT_ID") return false;
 
-  const redirectUri = window.location.origin + window.location.pathname;
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    redirect_uri: redirectUri,
+    redirect_uri: SPOTIFY_REDIRECT_URI,
     client_id: SPOTIFY_CLIENT_ID,
     code_verifier: verifier,
   });
@@ -455,8 +550,8 @@ function saveSpotifyTokenData(data) {
 
 function updateSpotifyButton() {
   if (spotifyTokenState.accessToken && Date.now() < spotifyTokenState.expiresAt - 60000) {
-    connectSpotifyBtn.textContent = "Spotify Connected";
-    connectSpotifyBtn.disabled = true;
+    connectSpotifyBtn.textContent = "Spotify connected (click to re-auth)";
+    connectSpotifyBtn.disabled = false;
     return;
   }
   connectSpotifyBtn.textContent = "Connect Spotify";
